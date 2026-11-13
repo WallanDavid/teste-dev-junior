@@ -292,6 +292,12 @@ legend {
   align-items: end;
 }
 
+/* Itens de grid têm min-width: auto; sem isso o <select> com texto longo estoura a largura do modal. */
+.linha-item > *,
+.filtros > * {
+  min-width: 0;
+}
+
 .linha-item .subtotal {
   text-align: right;
   padding-bottom: 0.5rem;
