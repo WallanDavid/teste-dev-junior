@@ -17,7 +17,10 @@ builder.Services.AddScoped<PedidoService>();
 builder.Services.AddScoped<RelatorioService>();
 
 builder.Services.ConfigureHttpJsonOptions(o =>
-    o.SerializerOptions.NumberHandling = JsonNumberHandling.Strict);
+{
+    o.SerializerOptions.NumberHandling = JsonNumberHandling.Strict;
+    o.SerializerOptions.Converters.Add(new DinheiroJsonConverter());
+});
 
 // Exceções não tratadas e erros de binding (ex.: data em formato inválido) também viram ProblemDetails.
 builder.Services.AddProblemDetails();
