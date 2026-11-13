@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (.NET build + testes unitários e de integração)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore Pedidos.sln
+
+      - name: Build
+        run: dotnet build Pedidos.sln --no-restore -c Release
+
+      - name: Testes unitários
+        run: dotnet test tests/Pedidos.UnitTests --no-build -c Release --logger "trx;LogFileName=unit.trx"
+
+      # Testcontainers usa o Docker do próprio runner para subir um SQL Server real.
+      - name: Testes de integração (SQL Server via Testcontainers)
+        run: dotnet test tests/Pedidos.IntegrationTests --no-build -c Release --logger "trx;LogFileName=integration.trx"
+
+      - name: Publicar resultados dos testes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dotnet-test-results
+          path: tests/**/TestResults/*.trx
+
+  frontend:
+    name: Frontend (lint + type check + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  e2e:
+    name: E2E (docker compose + Playwright)
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Subir a aplicação completa com um único comando
+        run: docker compose up --build -d --wait
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Instalar Playwright
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Testes E2E
+        working-directory: e2e
+        run: npx playwright test
+
+      - name: Logs do compose (em caso de falha)
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Relatório do Playwright
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report
+
+      - name: Derrubar ambiente
+        if: always()
+        run: docker compose down -v
