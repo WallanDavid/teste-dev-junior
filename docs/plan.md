@@ -13,7 +13,7 @@ src/
 tests/
   Pedidos.UnitTests/         xUnit + NSubstitute — domínio e PedidoService
   Pedidos.IntegrationTests/  xUnit + WebApplicationFactory + Testcontainers (SQL Server real)
-frontend/                  React 18 + TypeScript + Vite; servido por nginx no Docker
+frontend/                  React 19 + TypeScript + Vite; servido por nginx no Docker
 e2e/                       Playwright contra o docker compose
 database/                  scripts SQL (schema, carga, debug da query)
 ```
@@ -28,7 +28,7 @@ Dependências apontam para dentro: `Api → Application → Domain`, `Infrastruc
 4. **Solution .NET** — projetos, referências, pacotes.
 5. **Domínio** — `Pedido.Criar(...)` com RN01, RN04, RN05–RN08; testes unitários primeiro (TDD nas regras).
 6. **Aplicação** — `PedidoService.CriarAsync` (RN02, RN03, orquestração), `ListarAsync`, `TopClientesAsync`; validação de filtros; testes unitários com repositórios mockados.
-7. **Infraestrutura** — `PedidosDbContext`, configurações de entidade, repositórios, concorrência via `RowVersion`.
+7. **Infraestrutura** — `PedidosDbContext`, configurações de entidade, repositórios, baixa de estoque atômica (`UPDATE ... WHERE Estoque >= @q`) na mesma transação do pedido.
 8. **API** — endpoints, mapeamento de erros, Swagger, `/health`.
 9. **Testes de integração** — fixture Testcontainers que executa os **mesmos scripts** de `database/`; cenários CA01–CA15.
 10. **Frontend** — cliente HTTP tipado, listagem com filtros/paginação, modal de criação, top clientes.
@@ -44,9 +44,9 @@ Dependências apontam para dentro: `Api → Application → Domain`, `Infrastruc
 |---|---|---|---|
 | 1 | Criar o schema com **EF Core Migrations** e gerar os scripts a partir delas. | Scripts SQL escritos à mão em `database/` são a fonte da verdade; EF só mapeia. | O teste pede scripts de criação explícitos e índices pensados para as consultas. Manter migrations *e* scripts seria duas fontes da verdade. Os testes de integração executam os mesmos scripts, então qualquer divergência entre script e mapeamento EF quebra o teste. |
 | 2 | Coluna `ValorTotal` em `Pedidos`. | Não armazenar; calcular a partir dos itens com índice coberto. | Evita inconsistência entre total e itens. Pedido não é editável, então seria seguro, mas não há necessidade de performance que justifique agora. Registrado como evolução. |
-| 3 | Validar estoque com `SELECT` e depois `UPDATE` sem controle de concorrência. | `ROWVERSION` em `Produtos` + concorrência otimista do EF → 409. | A proposta tinha race condition: dois pedidos simultâneos poderiam vender o último item duas vezes. Também há `CHECK (Estoque >= 0)` como última barreira no banco. |
+| 3 | Validar estoque com `SELECT` e depois `UPDATE` sem controle de concorrência. | **1ª versão:** `ROWVERSION` + concorrência otimista do EF → 409. **Versão final:** `UPDATE Produtos SET Estoque = Estoque - @q WHERE Id = @id AND Estoque >= @q` na transação do pedido; 0 linhas afetadas → 422. | A proposta tinha race condition (vender o último item duas vezes). A 1ª correção (otimista) resolvia isso, mas o **e2e rodando em paralelo revelou falsos 409**: dois pedidos do mesmo produto com estoque sobrando conflitavam no RowVersion. Tentei *retry* com releitura (3 tentativas) e um teste de integração com 5 pedidos simultâneos falhou 5/5 — sob contenção eles colidem de novo a cada rodada. O UPDATE condicional serializa no lock da linha e só falha quando realmente não há estoque. `CHECK (Estoque >= 0)` continua como última barreira. Ver commits `fix(pedidos)`. |
 | 4 | Retornar **404** para cliente inexistente no `POST /pedidos`. | **422** com `code`. | O recurso `/pedidos` existe; o problema é o conteúdo. 404 confundiria o frontend com "rota não existe". |
-| 5 | Lançar exceções de domínio e tratar num middleware. | `Result<T>`/`Error` explícitos; exceção só para o que é excepcional (concorrência, infra). | Regras de negócio violadas são fluxo esperado, não exceção. Fica mais fácil testar e o mapeamento para HTTP fica num único lugar. |
+| 5 | Lançar exceções de domínio e tratar num middleware. | `Result<T>`/`Error` explícitos; exceção só para o que é excepcional (estoque esgotado no meio da gravação, infra). | Regras de negócio violadas são fluxo esperado, não exceção. Fica mais fácil testar e o mapeamento para HTTP fica num único lugar. |
 | 6 | `DateTime.UtcNow` direto no domínio. | `TimeProvider` injetado. | Permite testar a data do pedido de forma determinística. |
 | 7 | Usar **FluentAssertions** nos testes. | `Assert` do xUnit. | A partir da v8 o FluentAssertions tem licença comercial; para um projeto pequeno o xUnit basta e evita a dependência. |
 | 8 | Testcontainers com `EnsureCreated()` do EF para criar o schema. | Rodar `database/02-create-tables.sql` no container. | `EnsureCreated` criaria um schema diferente do real (sem os índices/CHECKs dos scripts) e o teste não provaria nada sobre o banco de verdade. |

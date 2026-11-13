@@ -44,7 +44,7 @@ public class PedidoServiceTests
 
         Assert.Equal(ErrorType.Validacao, Assert.Single(resultado.Errors).Type);
         await _clientes.DidNotReceiveWithAnyArgs().ObterPorIdAsync(default, default);
-        await _pedidos.DidNotReceiveWithAnyArgs().SalvarAlteracoesAsync(default);
+        await _pedidos.DidNotReceiveWithAnyArgs().SalvarAsync(default!, default);
     }
 
     [Fact]
@@ -65,8 +65,7 @@ public class PedidoServiceTests
         var erro = Assert.Single(resultado.Errors);
         Assert.Equal("cliente_nao_encontrado", erro.Code);
         Assert.Equal(ErrorType.Regra, erro.Type);
-        _pedidos.DidNotReceiveWithAnyArgs().Adicionar(default!);
-        await _pedidos.DidNotReceiveWithAnyArgs().SalvarAlteracoesAsync(default);
+        await _pedidos.DidNotReceiveWithAnyArgs().SalvarAsync(default!, default);
     }
 
     [Fact]
@@ -78,7 +77,7 @@ public class PedidoServiceTests
         var resultado = await _service.CriarAsync(Request(1, (1, 1), (2, 1)), default);
 
         Assert.Equal("produto_nao_encontrado", Assert.Single(resultado.Errors).Code);
-        await _pedidos.DidNotReceiveWithAnyArgs().SalvarAlteracoesAsync(default);
+        await _pedidos.DidNotReceiveWithAnyArgs().SalvarAsync(default!, default);
     }
 
     [Fact]
@@ -90,8 +89,7 @@ public class PedidoServiceTests
         var resultado = await _service.CriarAsync(Request(1, (1, 3)), default);
 
         Assert.Equal("estoque_insuficiente", Assert.Single(resultado.Errors).Code);
-        _pedidos.DidNotReceiveWithAnyArgs().Adicionar(default!);
-        await _pedidos.DidNotReceiveWithAnyArgs().SalvarAlteracoesAsync(default);
+        await _pedidos.DidNotReceiveWithAnyArgs().SalvarAsync(default!, default);
     }
 
     [Fact]
@@ -124,23 +122,25 @@ public class PedidoServiceTests
         Assert.Equal("Monitor", item.ProdutoNome);
         Assert.Equal(200m, item.Subtotal);
 
-        _pedidos.Received(1).Adicionar(Arg.Is<Pedido>(p => p.ClienteId == 1 && p.Itens.Count == 1));
-        await _pedidos.Received(1).SalvarAlteracoesAsync(Arg.Any<CancellationToken>());
+        await _pedidos.Received(1).SalvarAsync(
+            Arg.Is<Pedido>(p => p.ClienteId == 1 && p.Itens.Count == 1),
+            Arg.Any<CancellationToken>());
     }
 
-    [Fact]
-    public async Task CriarAsync_ConflitoDeConcorrenciaAoSalvar_RetornaConflito()
+    [Fact] // RN10: outro pedido levou o último item entre a validação e a gravação
+    public async Task CriarAsync_EstoqueEsgotaDuranteAGravacao_RetornaEstoqueInsuficienteComNomeDoProduto()
     {
         DadoCliente(1);
-        DadosProdutos(Produto(1, estoque: 5));
-        _pedidos.SalvarAlteracoesAsync(Arg.Any<CancellationToken>())
-            .ThrowsAsync(new ConcorrenciaException("rowversion mudou"));
+        DadosProdutos(Produto(1, estoque: 1, nome: "Mesa digitalizadora"));
+        _pedidos.SalvarAsync(Arg.Any<Pedido>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new EstoqueEsgotadoException(1));
 
         var resultado = await _service.CriarAsync(Request(1, (1, 1)), default);
 
         var erro = Assert.Single(resultado.Errors);
-        Assert.Equal("conflito_concorrencia", erro.Code);
-        Assert.Equal(ErrorType.Conflito, erro.Type);
+        Assert.Equal("estoque_insuficiente", erro.Code);
+        Assert.Equal(ErrorType.Regra, erro.Type);
+        Assert.Contains("Mesa digitalizadora", erro.Message);
     }
 
     // ------------------------------------------------------------------ ListarAsync

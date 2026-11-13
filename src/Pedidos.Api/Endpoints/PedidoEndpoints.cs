@@ -15,8 +15,7 @@ public static class PedidoEndpoints
             .WithSummary("Cria um pedido com itens, validando cliente e estoque")
             .Produces<PedidoDto>(StatusCodes.Status201Created)
             .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
-            .ProducesProblem(StatusCodes.Status409Conflict);
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
 
         group.MapGet("/", async ([AsParameters] FiltroPedidosRequest filtro, PedidoService service, CancellationToken ct) =>
                 (await service.ListarAsync(filtro, ct)).ToHttpResult())

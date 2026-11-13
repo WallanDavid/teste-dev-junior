@@ -39,10 +39,10 @@ public static class Errors
                 $"Estoque insuficiente para \"{produto}\": disponível {disponivel}, solicitado {solicitado}.",
                 ErrorType.Regra, "itens");
 
-        public static readonly Error ConflitoConcorrencia =
-            new("conflito_concorrencia",
-                "O estoque de um dos produtos foi alterado por outro pedido ao mesmo tempo. Tente novamente.",
-                ErrorType.Conflito);
+        public static Error EstoqueEsgotadoNaGravacao(string produto) =>
+            new("estoque_insuficiente",
+                $"O estoque de \"{produto}\" acabou enquanto o pedido era gravado (outro pedido foi concluído antes).",
+                ErrorType.Regra, "itens");
 
         public static Error NaoEncontrado(int pedidoId) =>
             new("pedido_nao_encontrado", $"Pedido {pedidoId} não encontrado.", ErrorType.NaoEncontrado);

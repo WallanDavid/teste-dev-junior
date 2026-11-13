@@ -142,8 +142,23 @@ public class PedidoEndpointsTests(ApiFactory factory)
         Assert.Single(respostas, r => r.StatusCode == HttpStatusCode.Created);
         Assert.All(
             respostas.Where(r => r.StatusCode != HttpStatusCode.Created),
-            r => Assert.Contains(r.StatusCode, new[] { HttpStatusCode.Conflict, HttpStatusCode.UnprocessableEntity }));
+            r => Assert.Equal(HttpStatusCode.UnprocessableEntity, r.StatusCode));
         Assert.Equal(0, await factory.ObterEstoqueAsync(produto.Id));
+        Assert.Equal(1, (await Task.WhenAll(clientes.Select(c => factory.ContarPedidosDoClienteAsync(c.Id)))).Sum());
+    }
+
+    [Fact] // RN10 — regressão: o e2e paralelo pegou 409 com estoque sobrando (concorrência otimista)
+    public async Task Post_PedidosConcorrentesComEstoqueSobrando_TodosSaoGravados()
+    {
+        var produto = await factory.CriarProdutoAsync(estoque: 100);
+        var clientes = await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => factory.CriarClienteAsync()));
+        // 5 × 2 = 10 unidades de um estoque de 100: nenhum pedido deveria falhar.
+
+        var respostas = await Task.WhenAll(clientes.Select(c =>
+            factory.CreateClient().PostAsJsonAsync("/pedidos", Pedido(c.Id, (produto.Id, 2)))));
+
+        Assert.All(respostas, r => Assert.Equal(HttpStatusCode.Created, r.StatusCode));
+        Assert.Equal(90, await factory.ObterEstoqueAsync(produto.Id));
     }
 
     // ---------------------------------------------------------------- GET /pedidos

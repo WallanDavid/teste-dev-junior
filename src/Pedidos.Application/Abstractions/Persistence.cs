@@ -20,11 +20,12 @@ public interface IProdutoRepository
 
 public interface IPedidoRepository
 {
-    void Adicionar(Pedido pedido);
-
-    /// <summary>Persiste pedido + baixa de estoque numa transação.</summary>
-    /// <exception cref="ConcorrenciaException">Outro processo alterou o estoque no meio do caminho.</exception>
-    Task SalvarAlteracoesAsync(CancellationToken ct);
+    /// <summary>
+    /// Grava o pedido e baixa o estoque de cada item numa única transação. A baixa é um UPDATE
+    /// condicional (<c>WHERE Estoque &gt;= @quantidade</c>), atômico mesmo com pedidos simultâneos.
+    /// </summary>
+    /// <exception cref="EstoqueEsgotadoException">O estoque acabou entre a validação e a gravação; nada foi gravado.</exception>
+    Task SalvarAsync(Pedido pedido, CancellationToken ct);
 }
 
 // Lado de leitura: projeções direto para DTO, sem rastreamento.
@@ -48,5 +49,9 @@ public interface ICatalogoQueries
     Task<IReadOnlyList<ProdutoDto>> ListarProdutosAsync(CancellationToken ct);
 }
 
-/// <summary>Conflito de concorrência otimista ao salvar (ex.: estoque alterado por outro pedido).</summary>
-public sealed class ConcorrenciaException(string message, Exception? inner = null) : Exception(message, inner);
+/// <summary>Outro pedido consumiu o estoque entre a validação e a gravação (corrida pelo último item).</summary>
+public sealed class EstoqueEsgotadoException(int produtoId)
+    : Exception($"Estoque do produto {produtoId} esgotou durante a gravação do pedido.")
+{
+    public int ProdutoId { get; } = produtoId;
+}

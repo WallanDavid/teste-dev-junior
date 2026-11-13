@@ -19,9 +19,6 @@ public class Produto
     public decimal Preco { get; private set; }
     public int Estoque { get; private set; }
 
-    /// <summary>Token de concorrência otimista (coluna ROWVERSION).</summary>
-    public byte[] RowVersion { get; private set; } = [];
-
     public bool PossuiEstoque(int quantidade) => Estoque >= quantidade;
 
     /// <summary>

@@ -28,12 +28,9 @@ public static class ResultExtensions
         }
 
         var principal = errors[0];
-        var status = principal.Type switch
-        {
-            ErrorType.NaoEncontrado => StatusCodes.Status404NotFound,
-            ErrorType.Conflito => StatusCodes.Status409Conflict,
-            _ => StatusCodes.Status422UnprocessableEntity,
-        };
+        var status = principal.Type == ErrorType.NaoEncontrado
+            ? StatusCodes.Status404NotFound
+            : StatusCodes.Status422UnprocessableEntity;
 
         return Results.Problem(
             statusCode: status,
@@ -46,10 +43,6 @@ public static class ResultExtensions
             });
     }
 
-    private static string Titulo(int status) => status switch
-    {
-        StatusCodes.Status404NotFound => "Recurso não encontrado.",
-        StatusCodes.Status409Conflict => "Conflito de concorrência.",
-        _ => "Regra de negócio violada.",
-    };
+    private static string Titulo(int status) =>
+        status == StatusCodes.Status404NotFound ? "Recurso não encontrado." : "Regra de negócio violada.";
 }

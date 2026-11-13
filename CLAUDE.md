@@ -6,7 +6,7 @@ Contexto para o Claude Code neste repositório. Antes de implementar algo novo, 
 
 - Backend: .NET 8, ASP.NET Core Minimal APIs, EF Core 8 (SQL Server), xUnit, NSubstitute, Testcontainers.
 - Banco: SQL Server 2022. **O schema é definido pelos scripts em `database/`**, não por migrations.
-- Frontend: React 18 + TypeScript + Vite (sem biblioteca de UI; CSS em `src/styles.css`).
+- Frontend: React 19 + TypeScript + Vite (sem biblioteca de UI; CSS em `src/styles.css`; lint com oxlint).
 - E2E: Playwright (`e2e/`). Infra: Docker Compose. CI: GitHub Actions.
 
 ## Arquitetura (backend)
@@ -23,9 +23,10 @@ Pedidos.Api  ──>  Pedidos.Application  ──>  Pedidos.Domain
 
 ### Regras que não podem ser quebradas
 
-- Violação de regra de negócio → `Error` (nunca `throw`). Exceção só para falha de infraestrutura/concorrência.
+- Violação de regra de negócio → `Error` (nunca `throw`). Exceção só para falha de infraestrutura (ou `EstoqueEsgotadoException`, lançada pelo repositório quando o UPDATE condicional não afeta linhas).
 - Códigos de erro (`Error.Code`) em `snake_case` e estáveis (o frontend depende deles). Catálogo em `Pedidos.Application/Common/Errors.cs`.
-- Validação de entrada → 400 (`validacao`); regra de negócio → 422; concorrência → 409.
+- Validação de entrada → 400 (`validacao`); regra de negócio → 422; recurso da URL inexistente → 404.
+- Estoque: a baixa é **sempre** `UPDATE ... WHERE Estoque >= @q` dentro da transação do pedido (ver `PedidoRepository`). Não troque por ler-checar-gravar nem por concorrência otimista: o e2e paralelo mostrou falsos conflitos.
 - Datas em UTC. Filtros de data são inclusivos e convertidos para `[inicio, fim + 1 dia)` — **nunca** use `YEAR()`/`CAST` em coluna no `WHERE` (não é sargável).
 - Toda mudança de schema: alterar `database/02-create-tables.sql` (idempotente) **e** a `*Configuration.cs` correspondente. Os testes de integração rodam o script, então divergência quebra o teste.
 - Não adicionar pacotes NuGet/npm sem necessidade clara.

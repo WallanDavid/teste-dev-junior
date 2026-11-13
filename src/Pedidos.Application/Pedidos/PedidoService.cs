@@ -30,7 +30,7 @@ public sealed class PedidoService(
         if (cliente is null)
             return Errors.Pedido.ClienteNaoEncontrado(request.ClienteId);
 
-        // 3) Regras que dependem dos produtos ficam no domínio.
+        // 3) Regras que dependem dos produtos ficam no domínio (falha rápido, com mensagem detalhada).
         var ids = itens.Select(i => i.ProdutoId).Distinct().ToList();
         var encontrados = await produtos.ObterPorIdsAsync(ids, ct);
 
@@ -38,15 +38,17 @@ public sealed class PedidoService(
         if (criacao.IsFailure)
             return Result<PedidoDto>.Failure(criacao.Errors);
 
-        // 4) Pedido + baixa de estoque gravados juntos; RowVersion detecta corrida (RN10).
-        pedidos.Adicionar(criacao.Value);
+        // 4) RN05/RN06/RN10: o repositório baixa o estoque com UPDATE condicional atômico e grava o
+        // pedido na mesma transação. Se outro pedido levou o estoque entre a leitura acima e a gravação,
+        // nada é gravado e devolvemos 422 — sem falso conflito quando ainda há estoque.
         try
         {
-            await pedidos.SalvarAlteracoesAsync(ct);
+            await pedidos.SalvarAsync(criacao.Value, ct);
         }
-        catch (ConcorrenciaException)
+        catch (EstoqueEsgotadoException ex)
         {
-            return Errors.Pedido.ConflitoConcorrencia;
+            var nome = encontrados.FirstOrDefault(p => p.Id == ex.ProdutoId)?.Nome ?? $"produto {ex.ProdutoId}";
+            return Errors.Pedido.EstoqueEsgotadoNaGravacao(nome);
         }
 
         return PedidoDto.De(criacao.Value, cliente);

@@ -31,7 +31,7 @@ Fora de escopo nesta versão: autenticação, edição/cancelamento de pedidos, 
 | RN07 | O preço unitário do item é **copiado do produto** no momento da criação (o cliente não informa preço). Alterações futuras de preço não afetam pedidos já feitos. |
 | RN08 | Se o mesmo produto aparecer em mais de uma linha da requisição, as quantidades são **somadas num único item** (e o estoque é validado sobre a soma). |
 | RN09 | A data do pedido é definida pelo **servidor** (UTC), não pelo cliente. |
-| RN10 | Concorrência: se dois pedidos disputarem o último estoque ao mesmo tempo, apenas um é gravado; o outro recebe **409 Conflict** e pode tentar novamente. |
+| RN10 | Concorrência: pedidos simultâneos do mesmo produto **não podem vender mais do que o estoque** nem falhar à toa. A baixa é um `UPDATE` condicional atômico (`WHERE Estoque >= @quantidade`); se outro pedido levou o último item entre a validação e a gravação, nada é gravado e a resposta é **422 `estoque_insuficiente`**. Se ainda há estoque, todos os pedidos são gravados. |
 | RN11 | Filtros de período usam datas **inclusivas** (`dataInicio` 00:00 até `dataFim` 23:59:59.999…), em UTC. `dataInicio` não pode ser maior que `dataFim`. |
 | RN12 | O ranking de top clientes considera o valor total dos pedidos no período, ordenado do maior para o menor; empate é desempatado pelo menor `clienteId` (resultado determinístico). |
 
@@ -51,7 +51,6 @@ Clientes (1) ───< (N) Pedidos (1) ───< (N) ItensPedido (N) >──�
 | | Nome | NVARCHAR(150) | NOT NULL |
 | | Preco | DECIMAL(18,2) | NOT NULL, CHECK ≥ 0 |
 | | Estoque | INT | NOT NULL, CHECK ≥ 0 |
-| | RowVersion | ROWVERSION | token de concorrência otimista (RN10) |
 | **Pedidos** | Id | INT IDENTITY | PK |
 | | ClienteId | INT | NOT NULL, FK → Clientes |
 | | DataPedido | DATETIME2(3) | NOT NULL, default `SYSUTCDATETIME()` |
@@ -92,8 +91,7 @@ Respostas:
 | 400 Bad Request | Sem itens (RN01), quantidade inválida (RN04), `clienteId`/`produtoId` ≤ 0. Body `ValidationProblemDetails` com `errors` por campo. | `validacao` |
 | 422 Unprocessable Entity | Cliente inexistente (RN02) | `cliente_nao_encontrado` |
 | 422 Unprocessable Entity | Produto inexistente (RN03) | `produto_nao_encontrado` |
-| 422 Unprocessable Entity | Estoque insuficiente (RN05). Mensagem cita o produto, o disponível e o solicitado. | `estoque_insuficiente` |
-| 409 Conflict | Conflito de concorrência no estoque (RN10) | `conflito_concorrencia` |
+| 422 Unprocessable Entity | Estoque insuficiente (RN05), inclusive quando esgota durante a gravação (RN10). Mensagem cita o produto. | `estoque_insuficiente` |
 
 > Por que 422 e não 404 para cliente inexistente? O recurso da URL (`/pedidos`) existe; o que está errado é o **conteúdo** da requisição, que é sintaticamente válido mas viola uma regra. 400 fica reservado para requisição malformada.
 

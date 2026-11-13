@@ -12,25 +12,36 @@ internal sealed class ClienteRepository(PedidosDbContext db) : IClienteRepositor
 
 internal sealed class ProdutoRepository(PedidosDbContext db) : IProdutoRepository
 {
-    // Rastreados: o estoque será alterado e o RowVersion carregado aqui é o usado na checagem de concorrência.
+    // Rastreados: os itens do pedido referenciam estas instâncias (navegação ItemPedido.Produto).
     public async Task<IReadOnlyList<Produto>> ObterPorIdsAsync(IReadOnlyCollection<int> ids, CancellationToken ct) =>
         await db.Produtos.Where(p => ids.Contains(p.Id)).ToListAsync(ct);
 }
 
 internal sealed class PedidoRepository(PedidosDbContext db) : IPedidoRepository
 {
-    public void Adicionar(Pedido pedido) => db.Pedidos.Add(pedido);
-
-    public async Task SalvarAlteracoesAsync(CancellationToken ct)
+    public async Task SalvarAsync(Pedido pedido, CancellationToken ct)
     {
-        try
+        await using var transacao = await db.Database.BeginTransactionAsync(ct);
+
+        // Baixa atômica: o próprio UPDATE confere o estoque. Dois pedidos simultâneos do mesmo produto
+        // serializam no lock da linha; o segundo só "perde" se realmente não houver mais estoque.
+        foreach (var item in pedido.Itens.OrderBy(i => i.ProdutoId)) // ordem fixa evita deadlock entre pedidos
         {
-            // SaveChanges já envolve INSERT do pedido/itens e UPDATE do estoque numa única transação.
-            await db.SaveChangesAsync(ct);
+            var afetadas = await db.Produtos
+                .Where(p => p.Id == item.ProdutoId && p.Estoque >= item.Quantidade)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.Estoque, p => p.Estoque - item.Quantidade), ct);
+
+            if (afetadas == 0)
+                throw new EstoqueEsgotadoException(item.ProdutoId); // dispose da transação = rollback
         }
-        catch (DbUpdateConcurrencyException ex)
-        {
-            throw new ConcorrenciaException("O estoque foi alterado por outra transação.", ex);
-        }
+
+        // O domínio já subtraiu o estoque nas instâncias em memória; o UPDATE acima é a fonte da verdade,
+        // então o EF não deve gerar um segundo UPDATE com os valores (possivelmente desatualizados) dela.
+        foreach (var produto in db.ChangeTracker.Entries<Produto>())
+            produto.State = EntityState.Unchanged;
+
+        db.Pedidos.Add(pedido);
+        await db.SaveChangesAsync(ct);
+        await transacao.CommitAsync(ct);
     }
 }

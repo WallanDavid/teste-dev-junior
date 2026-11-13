@@ -11,9 +11,6 @@ public enum ErrorType
 
     /// <summary>Entrada válida, mas viola regra de negócio (422).</summary>
     Regra,
-
-    /// <summary>Conflito de concorrência (409).</summary>
-    Conflito,
 }
 
 /// <param name="Code">Código estável em snake_case, consumido pelo frontend.</param>

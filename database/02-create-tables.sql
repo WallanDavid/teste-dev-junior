@@ -32,10 +32,9 @@ BEGIN
         Nome       NVARCHAR(150)      NOT NULL,
         Preco      DECIMAL(18, 2)     NOT NULL,
         Estoque    INT                NOT NULL,
-        RowVersion ROWVERSION         NOT NULL, -- concorrência otimista na baixa de estoque
         CONSTRAINT PK_Produtos PRIMARY KEY CLUSTERED (Id),
         CONSTRAINT CK_Produtos_Preco   CHECK (Preco >= 0),
-        CONSTRAINT CK_Produtos_Estoque CHECK (Estoque >= 0) -- última barreira contra estoque negativo
+        CONSTRAINT CK_Produtos_Estoque CHECK (Estoque >= 0) -- última barreira; a baixa usa UPDATE ... WHERE Estoque >= @q
     );
 END
 GO

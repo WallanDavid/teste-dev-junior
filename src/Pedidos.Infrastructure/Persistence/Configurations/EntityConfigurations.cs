@@ -29,7 +29,6 @@ internal sealed class ProdutoConfiguration : IEntityTypeConfiguration<Produto>
         builder.Property(p => p.Nome).HasMaxLength(150).IsRequired();
         builder.Property(p => p.Preco).HasPrecision(18, 2);
         builder.Property(p => p.Estoque);
-        builder.Property(p => p.RowVersion).IsRowVersion(); // UPDATE ... WHERE Id = @id AND RowVersion = @rv
     }
 }
 
