@@ -21,5 +21,8 @@ public sealed class PedidosDbContext(DbContextOptions<PedidosDbContext> options)
         // Tudo é gravado em UTC; o SQL Server devolve DateTimeKind.Unspecified, então marcamos como UTC
         // na leitura para o JSON sair com "Z" e o frontend converter corretamente para o fuso local.
         configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
+
+        // Valores monetários: DECIMAL(18,2) por padrão (inclui tipos sem tabela, como o resultado do relatório).
+        configurationBuilder.Properties<decimal>().HavePrecision(18, 2);
     }
 }

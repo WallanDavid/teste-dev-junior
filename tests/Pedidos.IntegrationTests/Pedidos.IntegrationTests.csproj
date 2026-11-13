@@ -26,4 +26,9 @@
     <ProjectReference Include="..\..\src\Pedidos.Api\Pedidos.Api.csproj" />
   </ItemGroup>
 
+  <!-- Os testes criam o schema com os MESMOS scripts usados no Docker Compose. -->
+  <ItemGroup>
+    <None Include="..\..\database\0*.sql" LinkBase="database" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
