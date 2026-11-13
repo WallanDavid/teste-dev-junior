@@ -5,7 +5,14 @@ description: Investiga uma query SQL lenta ou com resultado errado no SQL Server
 
 # Analisar query lenta/incorreta
 
-Pré-requisito: o SQL Server do compose rodando (`docker compose up -d sqlserver db-init`) e o MCP `sqlserver` conectado (`/mcp` deve listá-lo). Se o MCP não estiver disponível, rode os mesmos comandos com `docker compose exec sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -d Pedidos`.
+Pré-requisito: o SQL Server do compose rodando (`docker compose up -d sqlserver db-init`) e o MCP `sqlserver` conectado (`/mcp` deve listá-lo). Ferramentas do MCP (DBHub): `search_objects` (descobrir tabelas, colunas e índices) e `execute_sql` (rodar consultas).
+
+`SET SHOWPLAN_*`/`SET STATISTICS *` precisam de lotes separados e mensagens do servidor, que o `execute_sql` não devolve. Para essas medições use o sqlcmd do compose:
+
+```bash
+MSYS_NO_PATHCONV=1 docker compose run --rm -T --entrypoint /opt/mssql-tools18/bin/sqlcmd db-init \
+  -S sqlserver -U sa -P Pedidos_Dev2026 -C -d Pedidos -W -i /scripts/debug/<arquivo>.sql
+```
 
 ## Passo 1 — Corretude antes de performance
 
@@ -31,7 +38,7 @@ Pré-requisito: o SQL Server do compose rodando (`docker compose up -d sqlserver
    JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
    GROUP BY t.name, i.name, i.type_desc ORDER BY t.name, i.name;
    ```
-2. Se houver pouco volume, rode `database/debug/10-carga-volume.sql` (gera ~200 mil pedidos) para que a diferença apareça.
+2. Se houver pouco volume, rode `database/debug/10-carga-volume.sql` (gera ~500 mil pedidos e ~1,25 milhão de itens) para que a diferença apareça. Use `database/debug/05-medicao.sql` como modelo de medição.
 3. Meça original e corrigida no mesmo lote:
    ```sql
    SET STATISTICS IO, TIME ON;
