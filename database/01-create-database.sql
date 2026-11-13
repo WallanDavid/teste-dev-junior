@@ -1,0 +1,9 @@
+-- Cria o banco de dados (idempotente).
+IF DB_ID(N'Pedidos') IS NULL
+BEGIN
+    CREATE DATABASE Pedidos;
+END
+GO
+
+ALTER DATABASE Pedidos SET READ_COMMITTED_SNAPSHOT ON WITH ROLLBACK IMMEDIATE;
+GO
