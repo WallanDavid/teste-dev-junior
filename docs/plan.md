@@ -51,7 +51,7 @@ Dependências apontam para dentro: `Api → Application → Domain`, `Infrastruc
 | 7 | Usar **FluentAssertions** nos testes. | `Assert` do xUnit. | A partir da v8 o FluentAssertions tem licença comercial; para um projeto pequeno o xUnit basta e evita a dependência. |
 | 8 | Testcontainers com `EnsureCreated()` do EF para criar o schema. | Rodar `database/02-create-tables.sql` no container. | `EnsureCreated` criaria um schema diferente do real (sem os índices/CHECKs dos scripts) e o teste não provaria nada sobre o banco de verdade. |
 | 9 | SQL Server inicializado via script de entrypoint customizado na própria imagem do SQL Server. | Serviço `db-init` separado (mesma imagem, só roda `sqlcmd`) com `depends_on: service_healthy`, e a API com `service_completed_successfully`. | Mais simples e previsível que sobrescrever o entrypoint do SQL Server; a ordem de subida fica declarada no compose. |
-| 10 | Validar Docker e testes de integração localmente. | Validação via **GitHub Actions**. | Durante o desenvolvimento o Docker Desktop da máquina estava indisponível (serviço do WSL desativado). O pipeline de CI, que roda em runner com Docker, passou a ser a verificação de que `docker compose up` e Testcontainers funcionam. Ver README. |
+| 10 | Validar o compose só localmente. | Validar localmente **e** no **GitHub Actions** (compose + Playwright num runner limpo). | No início o Docker Desktop da máquina parecia indisponível (log antigo de erro do WSL) e o plano B era usar o CI como verificação. O Docker acabou subindo, mas manter o E2E no CI garante que `docker compose up` funciona numa máquina sem nada instalado além do Docker, sem depender de cache/volumes locais. |
 
 ## 4. Riscos e como foram tratados
 
