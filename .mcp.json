@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "sqlserver": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@bytebase/dbhub@1.6.1",
+        "--transport",
+        "stdio",
+        "--dsn",
+        "sqlserver://sa:Pedidos_Dev2026@localhost:1433/Pedidos?sslmode=disable"
+      ]
+    }
+  }
+}
